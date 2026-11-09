@@ -12,7 +12,6 @@
         :root {
             --light: #f0d9b5;
             --dark: #b58863;
-            --highlight: #7b9c5e;
             --selected: #f6f669;
         }
         body {
@@ -34,6 +33,7 @@
             font-weight: bold;
             min-height: 24px;
             text-align: center;
+            font-size: 18px;
         }
         #board {
             display: grid;
@@ -98,43 +98,41 @@
         button:hover { background: #45a049; }
         button:disabled { background: #666; cursor: not-allowed; }
         #room-input { width: 150px; }
+        .hidden { display: none; }
     </style>
 </head>
 <body>
 
 <h1>♔ Xadrez Multiplayer ♚</h1>
 <div id="status">Configure a sala e conecte</div>
-<div id="board"></div>
+<div id="board" class="hidden"></div>
 
 <div id="controls">
     <input type="text" id="room-input" placeholder="ID da Sala (ex: 123)" value="sala1">
     <button id="connect-btn">Conectar / Criar Sala</button>
-    <button id="reset-btn">Nova Partida (Local)</button>
+    <button id="reset-btn" class="hidden">Nova Partida</button>
 </div>
 
 <script>
     // ============================================
-    // CONFIGURAÇÃO DO SUPABASE (SUAS CHAVES AQUI)
+    // CONFIGURAÇÃO DO SUPABASE
     // ============================================
     const SUPABASE_URL = 'https://aiprlhinimcldpqgdxeu.supabase.co'; 
     const SUPABASE_ANON_KEY = 'sb_publishable_qUb2dauA7EeKdfOfiOQFXA_w5mLlvk-'; 
 
-    // Variáveis de estado do jogo
     let game = new Chess(); 
     let boardElement = document.getElementById('board');
     let statusElement = document.getElementById('status');
     let selectedSquare = null; 
     
-    // Variáveis de conexão
     let supabase = null;
     let channel = null;
-    let myColor = 'w'; 
+    let myColor = null; // Começa nulo, definido ao conectar
     let isMultiplayer = false;
     let roomId = '';
     let myClientId = Math.random().toString(36).substring(2, 9); 
 
     const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
-
     const pieceSymbols = {
         'p': '♟', 'r': '♜', 'n': '♞', 'b': '♝', 'q': '♛', 'k': '♚',
         'P': '♙', 'R': '♖', 'N': '♘', 'B': '♗', 'Q': '♕', 'K': '♔'
@@ -155,8 +153,6 @@
                 
                 const squareName = files[col] + (8 - row); 
                 squareDiv.dataset.square = squareName;
-                squareDiv.dataset.row = row;
-                squareDiv.dataset.col = col;
                 
                 const piece = board[row][col];
                 if (piece) {
@@ -164,7 +160,7 @@
                     squareDiv.textContent = pieceSymbols[symbolKey];
                 }
                 
-                squareDiv.addEventListener('click', () => handleSquareClick(row, col, squareName));
+                squareDiv.addEventListener('click', () => handleSquareClick(squareName));
                 boardElement.appendChild(squareDiv);
             }
         }
@@ -172,9 +168,9 @@
     }
 
     // ============================================
-    // LÓGICA DE CLIQUE E MOVIMENTO
+    // LÓGICA DE MOVIMENTO
     // ============================================
-    function handleSquareClick(row, col, squareName) {
+    function handleSquareClick(squareName) {
         if (game.game_over()) {
             statusElement.textContent = 'Fim de jogo! Reinicie.';
             return;
@@ -188,30 +184,34 @@
         const piece = game.get(squareName);
 
         if (selectedSquare) {
-            const from = selectedSquare.square;
+            const from = selectedSquare;
             const to = squareName;
 
-            const move = tryMove(from, to);
-            
-            if (move) {
-                if (isMultiplayer && channel) {
-                    channel.send({
-                        type: 'broadcast',
-                        event: 'move',
-                        payload: { from: from, to: to, promotion: move.promotion || 'q', sender: myClientId }
-                    });
-                }
-                selectedSquare = null;
-                initBoard();
-                updateStatus();
-                return;
-            } else {
-                if (piece && piece.color === game.turn()) {
-                    selectPiece(row, col, squareName);
-                } else {
+            try {
+                const move = game.move({ from: from, to: to, promotion: 'q' });
+                if (move) {
+                    if (isMultiplayer && channel) {
+                        channel.send({
+                            type: 'broadcast',
+                            event: 'move',
+                            payload: { from: from, to: to, promotion: move.promotion || 'q', sender: myClientId }
+                        });
+                    }
                     selectedSquare = null;
                     initBoard();
+                    updateStatus();
+                    return;
                 }
+            } catch (e) {
+                // Movimento inválido, trata abaixo
+            }
+            
+            // Se chegou aqui, o movimento falhou ou clicou em outra peça
+            if (piece && piece.color === game.turn()) {
+                selectPiece(squareName);
+            } else {
+                selectedSquare = null;
+                initBoard();
             }
         } else {
             if (piece && piece.color === game.turn()) {
@@ -219,14 +219,14 @@
                     statusElement.textContent = 'Você não pode mover as peças do adversário!';
                     return;
                 }
-                selectPiece(row, col, squareName);
+                selectPiece(squareName);
             }
         }
     }
 
-    function selectPiece(row, col, squareName) {
-        selectedSquare = { row, col, square: squareName };
-        document.querySelectorAll('.square').forEach(el => el.classList.remove('selected'));
+    function selectPiece(squareName) {
+        selectedSquare = squareName;
+        document.querySelectorAll('.square').forEach(el => el.classList.remove('selected', 'valid-move', 'valid-capture'));
         const squareDiv = document.querySelector(`.square[data-square="${squareName}"]`);
         if (squareDiv) squareDiv.classList.add('selected');
         
@@ -240,23 +240,11 @@
         });
     }
 
-    function tryMove(from, to) {
-        try {
-            const move = game.move({ from: from, to: to, promotion: 'q' });
-            return move; 
-        } catch (e) {
-            return null; 
-        }
-    }
-
-    // ============================================
-    // ATUALIZAÇÃO DE STATUS E XEQUE
-    // ============================================
     function updateStatus() {
         if (game.in_checkmate()) {
             statusElement.textContent = `Xeque-mate! ${game.turn() === 'w' ? 'Pretas' : 'Brancas'} venceram.`;
         } else if (game.in_draw()) {
-            statusElement.textContent = 'Empate! (Afogamento, material insuficiente, etc.)';
+            statusElement.textContent = 'Empate!';
         } else if (game.in_check()) {
             statusElement.textContent = `Xeque! Vez das ${game.turn() === 'w' ? 'brancas' : 'pretas'}.`;
         } else {
@@ -289,32 +277,30 @@
     }
 
     // ============================================
-    // SUPABASE MULTIPLAYER
+    // SUPABASE MULTIPLAYER (CORRIGIDO COM PRESENCE)
     // ============================================
     async function connectToRoom() {
         const inputRoom = document.getElementById('room-input').value.trim();
-        if (!inputRoom) {
-            alert('Digite um ID de sala.');
-            return;
-        }
+        if (!inputRoom) return alert('Digite um ID de sala.');
         
         roomId = inputRoom;
         isMultiplayer = true;
-        myColor = 'w'; 
         
         document.getElementById('connect-btn').disabled = true;
         statusElement.textContent = 'Conectando ao Supabase...';
 
         try {
             supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-            
             const channelName = `chess-room-${roomId}`;
             
-            // CONFIGURAÇÃO IMPORTANTE: self: true e ack: true para garantir entrega das mensagens
             channel = supabase.channel(channelName, {
-                config: { broadcast: { self: true, ack: true } } 
+                config: { 
+                    broadcast: { self: true, ack: true },
+                    presence: { key: myClientId }
+                } 
             });
 
+            // Escuta movimentos
             channel.on('broadcast', { event: 'move' }, (payload) => {
                 const data = payload.payload;
                 if (data.sender === myClientId) return;
@@ -328,31 +314,34 @@
                 }
             });
 
-            channel.on('broadcast', { event: 'join' }, (payload) => {
-                const data = payload.payload;
-                if (data.sender === myClientId) return;
+            // Sincroniza jogadores na sala para definir quem é Branco e quem é Preto
+            channel.on('presence', { event: 'sync' }, () => {
+                const state = channel.presenceState();
+                const players = Object.keys(state);
                 
-                if (myColor === 'w') {
-                    myColor = 'b';
+                // Se eu sou o primeiro na lista, sou branco. Se sou o segundo, sou preto.
+                if (players.length > 0) {
+                    if (players[0] === myClientId) {
+                        myColor = 'w';
+                    } else {
+                        myColor = 'b';
+                    }
+                } else {
+                    myColor = 'w';
                 }
-                statusElement.textContent = `Jogador conectado! Você é ${myColor === 'w' ? 'Brancas' : 'Pretas'}.`;
+                
+                boardElement.classList.remove('hidden');
+                document.getElementById('reset-btn').classList.remove('hidden');
                 updateStatus();
             });
 
-            await channel.subscribe((status) => {
+            // Entra no canal e anuncia presença
+            await channel.subscribe(async (status) => {
                 if (status === 'SUBSCRIBED') {
-                    channel.send({
-                        type: 'broadcast',
-                        event: 'join',
-                        payload: { sender: myClientId }
-                    });
-                    statusElement.textContent = `Conectado à sala "${roomId}". Aguardando adversário...`;
-                } else {
-                    statusElement.textContent = `Status da conexão: ${status}`;
+                    await channel.track({ online_at: new Date().toISOString() });
+                    statusElement.textContent = `Conectado à sala "${roomId}".`;
                 }
             });
-
-            updateStatus();
 
         } catch (error) {
             console.error(error);
@@ -361,24 +350,17 @@
         }
     }
 
-    function resetGame() {
+    document.getElementById('connect-btn').addEventListener('click', connectToRoom);
+    document.getElementById('reset-btn').addEventListener('click', () => {
+        if (isMultiplayer && !confirm('Reiniciar a partida localmente?')) return;
         game = new Chess();
         selectedSquare = null;
         initBoard();
         updateStatus();
-    }
-
-    document.getElementById('connect-btn').addEventListener('click', connectToRoom);
-    document.getElementById('reset-btn').addEventListener('click', () => {
-        if (isMultiplayer) {
-            if (!confirm('Você está em uma partida multiplayer. Resetar vai reiniciar o tabuleiro localmente. Continuar?')) return;
-        }
-        resetGame();
     });
 
+    // Inicializa vazio até conectar
     initBoard();
-    updateStatus();
-
 </script>
 </body>
 </html>
