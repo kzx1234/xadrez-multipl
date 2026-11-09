@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Xadrez Multiplayer</title>
     
-    <!-- ESSAS DUAS LINHAS SÃO OBRIGATÓRIAS E ESTAVAM FALTANDO -->
+    <!-- Bibliotecas externas -->
     <script src="https://cdn.jsdelivr.net/npm/chess.js@1.0.0/dist/chess.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
@@ -26,35 +26,56 @@
             margin: 0;
         }
         h1 { margin-bottom: 10px; }
-        #status {
+        #status-box {
             margin-bottom: 15px;
-            padding: 10px 20px;
-            background: #444;
+            padding: 15px;
+            background: #333;
             border-radius: 8px;
-            font-weight: bold;
-            min-height: 24px;
             text-align: center;
+            width: 100%;
+            max-width: 600px;
+            box-sizing: border-box;
+        }
+        #status-text {
+            font-weight: bold;
             font-size: 18px;
+            margin-bottom: 10px;
+        }
+        #room-code-display {
+            display: none;
+            font-size: 24px;
+            font-weight: bold;
+            color: #4CAF50;
+            letter-spacing: 2px;
+            margin: 10px 0;
+            background: #222;
+            padding: 10px;
+            border-radius: 6px;
+            border: 2px dashed #4CAF50;
         }
         #board {
             display: grid;
-            grid-template-columns: repeat(8, 70px);
-            grid-template-rows: repeat(8, 70px);
+            grid-template-columns: repeat(8, 60px);
+            grid-template-rows: repeat(8, 60px);
             border: 5px solid #5a3e2b;
             border-radius: 4px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.5);
             user-select: none;
+            opacity: 0.3;
+            pointer-events: none;
+            transition: 0.3s;
         }
-        /* A classe hidden esconde o tabuleiro até conectar */
-        #board.hidden { display: none; }
-        
+        #board.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
         .square {
-            width: 70px;
-            height: 70px;
+            width: 60px;
+            height: 60px;
             display: flex;
             justify-content: center;
             align-items: center;
-            font-size: 50px;
+            font-size: 45px;
             cursor: pointer;
             position: relative;
         }
@@ -63,29 +84,32 @@
         .square.selected { background-color: var(--selected) !important; }
         .square.valid-move::after {
             content: '';
-            width: 20px;
-            height: 20px;
+            width: 16px;
+            height: 16px;
             background-color: rgba(0,0,0,0.2);
             border-radius: 50%;
             position: absolute;
         }
         .square.valid-capture::after {
             content: '';
-            width: 60px;
-            height: 60px;
-            border: 5px solid rgba(0,0,0,0.2);
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(0,0,0,0.2);
             border-radius: 50%;
             position: absolute;
             box-sizing: border-box;
         }
-        .square.check { box-shadow: inset 0 0 20px 5px red; }
+        .square.check { box-shadow: inset 0 0 15px 5px red; }
         #controls {
             margin-top: 20px;
             display: flex;
+            flex-direction: column;
             gap: 10px;
-            flex-wrap: wrap;
-            justify-content: center;
             align-items: center;
+        }
+        .input-group {
+            display: flex;
+            gap: 10px;
         }
         input, button {
             padding: 10px 15px;
@@ -98,42 +122,65 @@
             color: white;
             cursor: pointer;
             font-weight: bold;
+            transition: 0.2s;
         }
         button:hover { background: #45a049; }
         button:disabled { background: #666; cursor: not-allowed; }
-        #room-input { width: 150px; }
+        #join-room-input { width: 140px; text-transform: uppercase; text-align: center; }
+        .error-msg {
+            color: #ff5252;
+            font-weight: bold;
+            margin-top: 10px;
+            display: none;
+        }
     </style>
 </head>
 <body>
 
 <h1>♔ Xadrez Multiplayer ♚</h1>
-<div id="status">Configure a sala e conecte</div>
-<div id="board" class="hidden"></div>
+
+<div id="status-box">
+    <div id="status-text">Escolha uma opção abaixo para começar.</div>
+    <div id="room-code-display">CÓDIGO DA SALA: <span id="room-code-value"></span></div>
+    <div id="error-msg" class="error-msg"></div>
+</div>
+
+<div id="board"></div>
 
 <div id="controls">
-    <input type="text" id="room-input" placeholder="ID da Sala" value="sala1">
-    <button id="connect-btn">Conectar / Criar Sala</button>
-    <button id="reset-btn" class="hidden">Nova Partida</button>
+    <!-- Opção 1: Criar Sala -->
+    <button id="create-btn">Criar Nova Sala (Brancas)</button>
+    
+    <!-- Opção 2: Entrar em Sala -->
+    <div class="input-group">
+        <input type="text" id="join-room-input" placeholder="CÓDIGO" maxlength="6">
+        <button id="join-btn">Entrar na Sala (Pretas)</button>
+    </div>
 </div>
 
 <script>
     // ============================================
-    // CONFIGURAÇÃO DO SUPABASE (COM SUAS CHAVES)
+    // CONFIGURAÇÃO DO SUPABASE
     // ============================================
     const SUPABASE_URL = 'https://aiprlhinimcldpqgdxeu.supabase.co'; 
     const SUPABASE_ANON_KEY = 'sb_publishable_qUb2dauA7EeKdfOfiOQFXA_w5mLlvk-'; 
 
+    // Elementos da tela
+    const boardElement = document.getElementById('board');
+    const statusText = document.getElementById('status-text');
+    const roomCodeDisplay = document.getElementById('room-code-display');
+    const roomCodeValue = document.getElementById('room-code-value');
+    const errorMsg = document.getElementById('error-msg');
+    const createBtn = document.getElementById('create-btn');
+    const joinBtn = document.getElementById('join-btn');
+    const joinInput = document.getElementById('join-room-input');
+
+    // Variáveis do Jogo
     let game = new Chess(); 
-    let boardElement = document.getElementById('board');
-    let statusElement = document.getElementById('status');
     let selectedSquare = null; 
-    
     let supabaseClient = null;
     let channel = null;
     let myColor = null; 
-    let isMultiplayer = false;
-    let roomId = '';
-    // Cria um ID aleatório para esse jogador
     let myClientId = Math.random().toString(36).substring(2, 9); 
 
     const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
@@ -143,8 +190,17 @@
     };
 
     // ============================================
-    // INICIALIZAÇÃO DO TABULEIRO
+    // FUNÇÕES DE INTERFACE E TABULEIRO
     // ============================================
+    function showError(msg) {
+        errorMsg.textContent = msg;
+        errorMsg.style.display = 'block';
+    }
+
+    function clearError() {
+        errorMsg.style.display = 'none';
+    }
+
     function initBoard() {
         boardElement.innerHTML = '';
         const board = game.board();
@@ -171,17 +227,14 @@
         highlightCheck();
     }
 
-    // ============================================
-    // LÓGICA DE MOVIMENTO
-    // ============================================
     function handleSquareClick(squareName) {
         if (game.game_over()) {
-            statusElement.textContent = 'Fim de jogo! Reinicie.';
+            statusText.textContent = 'Fim de jogo!';
             return;
         }
 
-        if (isMultiplayer && game.turn() !== myColor) {
-            statusElement.textContent = `Aguarde... é a vez das ${game.turn() === 'w' ? 'brancas' : 'pretas'}.`;
+        if (game.turn() !== myColor) {
+            statusText.textContent = `Aguarde... é a vez das ${game.turn() === 'w' ? 'brancas' : 'pretas'}.`;
             return;
         }
 
@@ -194,7 +247,7 @@
             try {
                 const move = game.move({ from: from, to: to, promotion: 'q' });
                 if (move) {
-                    if (isMultiplayer && channel) {
+                    if (channel) {
                         channel.send({
                             type: 'broadcast',
                             event: 'move',
@@ -206,9 +259,7 @@
                     updateStatus();
                     return;
                 }
-            } catch (e) {
-                // Movimento inválido
-            }
+            } catch (e) {}
             
             if (piece && piece.color === game.turn()) {
                 selectPiece(squareName);
@@ -218,8 +269,8 @@
             }
         } else {
             if (piece && piece.color === game.turn()) {
-                if (isMultiplayer && piece.color !== myColor) {
-                    statusElement.textContent = 'Você não pode mover as peças do adversário!';
+                if (piece.color !== myColor) {
+                    statusText.textContent = 'Você não pode mover as peças do adversário!';
                     return;
                 }
                 selectPiece(squareName);
@@ -245,17 +296,17 @@
 
     function updateStatus() {
         if (game.in_checkmate()) {
-            statusElement.textContent = `Xeque-mate! ${game.turn() === 'w' ? 'Pretas' : 'Brancas'} venceram.`;
+            statusText.textContent = `Xeque-mate! ${game.turn() === 'w' ? 'Pretas' : 'Brancas'} venceram.`;
         } else if (game.in_draw()) {
-            statusElement.textContent = 'Empate!';
+            statusText.textContent = 'Empate!';
         } else if (game.in_check()) {
-            statusElement.textContent = `Xeque! Vez das ${game.turn() === 'w' ? 'brancas' : 'pretas'}.`;
+            statusText.textContent = `Xeque! Vez das ${game.turn() === 'w' ? 'brancas' : 'pretas'}.`;
         } else {
-            statusElement.textContent = `Vez das ${game.turn() === 'w' ? 'brancas' : 'pretas'}.`;
+            statusText.textContent = `Vez das ${game.turn() === 'w' ? 'brancas' : 'pretas'}.`;
         }
         
-        if (isMultiplayer && myColor) {
-            statusElement.textContent += ` (Você é ${myColor === 'w' ? 'Brancas' : 'Pretas'})`;
+        if (myColor) {
+            statusText.textContent += ` (Você é ${myColor === 'w' ? 'Brancas' : 'Pretas'})`;
         }
         highlightCheck();
     }
@@ -280,26 +331,19 @@
     }
 
     // ============================================
-    // SUPABASE MULTIPLAYER
+    // CONEXÃO SUPABASE (CRIAR OU ENTRAR)
     // ============================================
-    async function connectToRoom() {
-        const inputRoom = document.getElementById('room-input').value.trim();
-        if (!inputRoom) return alert('Digite um ID de sala.');
-        
-        roomId = inputRoom;
-        isMultiplayer = true;
-        
-        document.getElementById('connect-btn').disabled = true;
-        statusElement.textContent = 'Conectando ao Supabase...';
+    function conectarSala(codigoSala, corJogador) {
+        clearError();
+        createBtn.disabled = true;
+        joinBtn.disabled = true;
+        statusText.textContent = 'Conectando...';
 
         try {
-            // Verifica se a biblioteca do Supabase carregou corretamente
-            if (!window.supabase) {
-                throw new Error("Biblioteca do Supabase não carregou. Recarregue a página.");
-            }
+            if (!window.supabase) throw new Error("Falha ao carregar a biblioteca. Atualize a página com Ctrl+F5.");
 
             supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-            const channelName = `chess-room-${roomId}`;
+            const channelName = `chess-${codigoSala}`;
             
             channel = supabaseClient.channel(channelName, {
                 config: { 
@@ -308,69 +352,73 @@
                 } 
             });
 
-            // Escuta movimentos
+            // Recebe os movimentos
             channel.on('broadcast', { event: 'move' }, (payload) => {
                 const data = payload.payload;
                 if (data.sender === myClientId) return;
-                
                 try {
                     game.move({ from: data.from, to: data.to, promotion: data.promotion || 'q' });
                     initBoard();
                     updateStatus();
-                } catch (e) {
-                    console.error('Movimento remoto inválido:', e);
-                }
+                } catch (e) { console.error('Erro no movimento:', e); }
             });
 
-            // Sincroniza jogadores (Presence)
+            // Sincroniza quem está na sala
             channel.on('presence', { event: 'sync' }, () => {
                 const state = channel.presenceState();
                 const players = Object.keys(state);
                 
-                if (players.length > 0) {
-                    if (players[0] === myClientId) {
-                        myColor = 'w';
-                    } else {
-                        myColor = 'b';
-                    }
+                // Lógica de segurança: se o jogador 2 entrou, ele assume as Pretas
+                if (players.length > 1 && corJogador === 'w') {
+                     // Se por acaso dois tentarem ser brancos, um vira preto
+                    myColor = players[0] === myClientId ? 'w' : 'b';
                 } else {
-                    myColor = 'w';
+                    myColor = corJogador;
                 }
                 
-                boardElement.classList.remove('hidden');
-                document.getElementById('reset-btn').classList.remove('hidden');
+                boardElement.classList.add('active');
                 updateStatus();
             });
 
-            // Entra no canal
-            await channel.subscribe(async (status) => {
+            channel.subscribe(async (status) => {
                 if (status === 'SUBSCRIBED') {
                     await channel.track({ online_at: new Date().toISOString() });
-                    statusElement.textContent = `Conectado à sala "${roomId}". Aguardando adversário...`;
+                    roomCodeDisplay.style.display = 'block';
+                    roomCodeValue.textContent = codigoSala;
+                    statusText.textContent = `Conectado! Você é ${corJogador === 'w' ? 'Brancas' : 'Pretas'}.`;
                 } else if (status === 'CHANNEL_ERROR') {
-                    statusElement.textContent = 'Erro no canal. Verifique o Supabase.';
+                    showError("Erro ao conectar no banco. Verifique o Supabase.");
+                    createBtn.disabled = false;
+                    joinBtn.disabled = false;
                 }
             });
 
         } catch (error) {
-            console.error(error);
-            statusElement.textContent = 'Erro: ' + error.message;
-            document.getElementById('connect-btn').disabled = false;
-            boardElement.classList.remove('hidden');
+            showError("Erro: " + error.message);
+            createBtn.disabled = false;
+            joinBtn.disabled = false;
         }
     }
 
-    document.getElementById('connect-btn').addEventListener('click', connectToRoom);
-    
-    document.getElementById('reset-btn').addEventListener('click', () => {
-        if (isMultiplayer && !confirm('Reiniciar a partida localmente?')) return;
-        game = new Chess();
-        selectedSquare = null;
-        initBoard();
-        updateStatus();
+    // ============================================
+    // BOTÕES
+    // ============================================
+    createBtn.addEventListener('click', () => {
+        // Gera um código de 6 caracteres
+        const codigo = Math.random().toString(36).substring(2, 8).toUpperCase();
+        conectarSala(codigo, 'w');
     });
 
-    // Inicializa o tabuleiro na tela assim que a página abre
+    joinBtn.addEventListener('click', () => {
+        const codigo = joinInput.value.trim().toUpperCase();
+        if (codigo.length < 4) {
+            showError("Digite um código válido.");
+            return;
+        }
+        conectarSala(codigo, 'b');
+    });
+
+    // Inicializa o tabuleiro apagado na tela
     initBoard();
 </script>
 </body>
