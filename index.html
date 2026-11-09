@@ -4,10 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Xadrez Multiplayer</title>
-    <!-- chess.js: Biblioteca de regras oficiais do xadrez -->
+    
+    <!-- ESSAS DUAS LINHAS SÃO OBRIGATÓRIAS E ESTAVAM FALTANDO -->
     <script src="https://cdn.jsdelivr.net/npm/chess.js@1.0.0/dist/chess.js"></script>
-    <!-- Supabase Client -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
     <style>
         :root {
             --light: #f0d9b5;
@@ -44,6 +45,9 @@
             box-shadow: 0 10px 30px rgba(0,0,0,0.5);
             user-select: none;
         }
+        /* A classe hidden esconde o tabuleiro até conectar */
+        #board.hidden { display: none; }
+        
         .square {
             width: 70px;
             height: 70px;
@@ -98,7 +102,6 @@
         button:hover { background: #45a049; }
         button:disabled { background: #666; cursor: not-allowed; }
         #room-input { width: 150px; }
-        .hidden { display: none; }
     </style>
 </head>
 <body>
@@ -108,14 +111,14 @@
 <div id="board" class="hidden"></div>
 
 <div id="controls">
-    <input type="text" id="room-input" placeholder="ID da Sala (ex: 123)" value="sala1">
+    <input type="text" id="room-input" placeholder="ID da Sala" value="sala1">
     <button id="connect-btn">Conectar / Criar Sala</button>
     <button id="reset-btn" class="hidden">Nova Partida</button>
 </div>
 
 <script>
     // ============================================
-    // CONFIGURAÇÃO DO SUPABASE
+    // CONFIGURAÇÃO DO SUPABASE (COM SUAS CHAVES)
     // ============================================
     const SUPABASE_URL = 'https://aiprlhinimcldpqgdxeu.supabase.co'; 
     const SUPABASE_ANON_KEY = 'sb_publishable_qUb2dauA7EeKdfOfiOQFXA_w5mLlvk-'; 
@@ -125,11 +128,12 @@
     let statusElement = document.getElementById('status');
     let selectedSquare = null; 
     
-    let supabase = null;
+    let supabaseClient = null;
     let channel = null;
-    let myColor = null; // Começa nulo, definido ao conectar
+    let myColor = null; 
     let isMultiplayer = false;
     let roomId = '';
+    // Cria um ID aleatório para esse jogador
     let myClientId = Math.random().toString(36).substring(2, 9); 
 
     const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
@@ -203,10 +207,9 @@
                     return;
                 }
             } catch (e) {
-                // Movimento inválido, trata abaixo
+                // Movimento inválido
             }
             
-            // Se chegou aqui, o movimento falhou ou clicou em outra peça
             if (piece && piece.color === game.turn()) {
                 selectPiece(squareName);
             } else {
@@ -251,7 +254,7 @@
             statusElement.textContent = `Vez das ${game.turn() === 'w' ? 'brancas' : 'pretas'}.`;
         }
         
-        if (isMultiplayer) {
+        if (isMultiplayer && myColor) {
             statusElement.textContent += ` (Você é ${myColor === 'w' ? 'Brancas' : 'Pretas'})`;
         }
         highlightCheck();
@@ -277,7 +280,7 @@
     }
 
     // ============================================
-    // SUPABASE MULTIPLAYER (CORRIGIDO COM PRESENCE)
+    // SUPABASE MULTIPLAYER
     // ============================================
     async function connectToRoom() {
         const inputRoom = document.getElementById('room-input').value.trim();
@@ -290,10 +293,15 @@
         statusElement.textContent = 'Conectando ao Supabase...';
 
         try {
-            supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            // Verifica se a biblioteca do Supabase carregou corretamente
+            if (!window.supabase) {
+                throw new Error("Biblioteca do Supabase não carregou. Recarregue a página.");
+            }
+
+            supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
             const channelName = `chess-room-${roomId}`;
             
-            channel = supabase.channel(channelName, {
+            channel = supabaseClient.channel(channelName, {
                 config: { 
                     broadcast: { self: true, ack: true },
                     presence: { key: myClientId }
@@ -314,12 +322,11 @@
                 }
             });
 
-            // Sincroniza jogadores na sala para definir quem é Branco e quem é Preto
+            // Sincroniza jogadores (Presence)
             channel.on('presence', { event: 'sync' }, () => {
                 const state = channel.presenceState();
                 const players = Object.keys(state);
                 
-                // Se eu sou o primeiro na lista, sou branco. Se sou o segundo, sou preto.
                 if (players.length > 0) {
                     if (players[0] === myClientId) {
                         myColor = 'w';
@@ -335,22 +342,26 @@
                 updateStatus();
             });
 
-            // Entra no canal e anuncia presença
+            // Entra no canal
             await channel.subscribe(async (status) => {
                 if (status === 'SUBSCRIBED') {
                     await channel.track({ online_at: new Date().toISOString() });
-                    statusElement.textContent = `Conectado à sala "${roomId}".`;
+                    statusElement.textContent = `Conectado à sala "${roomId}". Aguardando adversário...`;
+                } else if (status === 'CHANNEL_ERROR') {
+                    statusElement.textContent = 'Erro no canal. Verifique o Supabase.';
                 }
             });
 
         } catch (error) {
             console.error(error);
-            statusElement.textContent = 'Erro ao conectar: ' + error.message;
+            statusElement.textContent = 'Erro: ' + error.message;
             document.getElementById('connect-btn').disabled = false;
+            boardElement.classList.remove('hidden');
         }
     }
 
     document.getElementById('connect-btn').addEventListener('click', connectToRoom);
+    
     document.getElementById('reset-btn').addEventListener('click', () => {
         if (isMultiplayer && !confirm('Reiniciar a partida localmente?')) return;
         game = new Chess();
@@ -359,7 +370,7 @@
         updateStatus();
     });
 
-    // Inicializa vazio até conectar
+    // Inicializa o tabuleiro na tela assim que a página abre
     initBoard();
 </script>
 </body>
