@@ -3,203 +3,440 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Xadrez Multiplayer</title>
-    
-    <!-- Bibliotecas -->
-    <script src="https://cdn.jsdelivr.net/npm/chess.js@1.0.0/dist/chess.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
+    <title>Xadrez P2P</title>
     <style>
-        body { font-family: sans-serif; background: #2b2b2b; color: #fff; text-align: center; padding: 20px; }
-        #board { display: grid; grid-template-columns: repeat(8, 50px); gap: 0; margin: 20px auto; border: 5px solid #5a3e2b; width: max-content; opacity: 0.3; pointer-events: none; }
-        #board.active { opacity: 1; pointer-events: auto; }
-        .square { width: 50px; height: 50px; display: flex; justify-content: center; align-items: center; font-size: 35px; cursor: pointer; }
-        .light { background-color: #f0d9b5; color: #000; }
-        .dark { background-color: #b58863; color: #000; }
-        .selected { background-color: #f6f669 !important; }
-        .valid-move::after { content: ''; width: 15px; height: 15px; background: rgba(0,0,0,0.2); border-radius: 50%; position: absolute; }
-        button, input { padding: 10px; font-size: 16px; margin: 5px; border-radius: 5px; border: none; }
-        button { background: #4CAF50; color: white; cursor: pointer; }
-        button:disabled { background: #666; }
-        #error-box { color: #ff5252; font-weight: bold; margin-top: 10px; height: 20px; }
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background-color: #2b2b2b;
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+            padding: 20px;
+        }
+        h1 { margin-bottom: 5px; }
+        #status {
+            background: #444;
+            padding: 10px 20px;
+            border-radius: 8px;
+            margin: 15px 0;
+            font-weight: bold;
+            min-height: 24px;
+            text-align: center;
+            max-width: 600px;
+            word-break: break-all;
+        }
+        #board {
+            display: grid;
+            grid-template-columns: repeat(8, 60px);
+            grid-template-rows: repeat(8, 60px);
+            border: 5px solid #5a3e2b;
+            border-radius: 4px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            user-select: none;
+            opacity: 0.3;
+            pointer-events: none;
+            transition: 0.3s;
+        }
+        #board.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .square {
+            width: 60px;
+            height: 60px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 45px;
+            cursor: pointer;
+            position: relative;
+        }
+        .square.light { background-color: #f0d9b5; color: #000; }
+        .square.dark { background-color: #b58863; color: #000; }
+        .square.selected { background-color: #f6f669 !important; }
+        .square.valid-move::after {
+            content: '';
+            width: 16px;
+            height: 16px;
+            background-color: rgba(0,0,0,0.2);
+            border-radius: 50%;
+            position: absolute;
+        }
+        .square.valid-capture::after {
+            content: '';
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(0,0,0,0.2);
+            border-radius: 50%;
+            position: absolute;
+            box-sizing: border-box;
+        }
+        .square.check { box-shadow: inset 0 0 15px 5px red; }
+        #controls {
+            margin-top: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            width: 100%;
+            max-width: 500px;
+        }
+        .panel {
+            background: #333;
+            padding: 15px;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        input, button {
+            padding: 12px;
+            border-radius: 6px;
+            border: none;
+            font-size: 16px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        button:hover { background: #45a049; }
+        button:disabled { background: #666; cursor: not-allowed; }
+        textarea {
+            width: 100%;
+            height: 80px;
+            padding: 10px;
+            border-radius: 6px;
+            border: none;
+            font-size: 12px;
+            resize: none;
+            box-sizing: border-box;
+            display: none;
+        }
+        .hidden { display: none !important; }
     </style>
 </head>
 <body>
 
-<h1>♔ Xadrez Multiplayer ♚</h1>
-
-<div id="error-box"></div>
-<div id="status">Escolha uma opção abaixo.</div>
-
-<button id="create-btn">Criar Nova Sala (Brancas)</button>
-<input type="text" id="join-input" placeholder="CÓDIGO DA SALA" maxlength="6" style="text-transform: uppercase;">
-<button id="join-btn">Entrar (Pretas)</button>
-
+<h1>♔ Xadrez P2P ♚</h1>
+<div id="status">Aguardando conexão...</div>
 <div id="board"></div>
 
+<div id="controls">
+    <!-- Painel de Criar Sala -->
+    <div class="panel" id="create-panel">
+        <button id="host-btn">Criar Nova Sala (Jogar de Brancas)</button>
+        <div id="host-info" class="hidden">
+            <p>Copie o código abaixo e envie para seu amigo:</p>
+            <textarea id="offer-code" readonly></textarea>
+            <button id="copy-btn">Copiar Código</button>
+            
+            <p style="margin-top:15px;">Cole a resposta do seu amigo aqui para iniciar:</p>
+            <textarea id="answer-input" placeholder="Cole a resposta aqui..."></textarea>
+            <button id="finish-connect-btn">Iniciar Jogo</button>
+        </div>
+    </div>
+
+    <!-- Painel de Entrar na Sala -->
+    <div class="panel" id="join-panel">
+        <p>Cole o código da sala que seu amigo enviou:</p>
+        <textarea id="offer-input" placeholder="Cole o código aqui..."></textarea>
+        <button id="join-btn">Conectar (Jogar de Pretas)</button>
+        
+        <div id="join-info" class="hidden">
+            <p>Copie o código abaixo e envie de volta para seu amigo:</p>
+            <textarea id="answer-code" readonly></textarea>
+            <button id="copy-answer-btn">Copiar Resposta</button>
+        </div>
+    </div>
+</div>
+
 <script>
-    // Avisa que o script começou a rodar
-    console.log("Script iniciado!");
+    // ============================================
+    // 1. LÓGICA DO XADREZ (Sem bibliotecas)
+    // ============================================
+    const initialBoard = [
+        ['r','n','b','q','k','b','n','r'],
+        ['p','p','p','p','p','p','p','p'],
+        [null,null,null,null,null,null,null,null],
+        [null,null,null,null,null,null,null,null],
+        [null,null,null,null,null,null,null,null],
+        [null,null,null,null,null,null,null,null],
+        ['P','P','P','P','P','P','P','P'],
+        ['R','N','B','Q','K','B','N','R']
+    ];
+
+    const symbols = { 'p':'♟','r':'♜','n':'♞','b':'♝','q':'♛','k':'♚','P':'♙','R':'♖','N':'♘','B':'♗','Q':'♕','K':'♔' };
+    const files = ['a','b','c','d','e','f','g','h'];
+
+    let board = JSON.parse(JSON.stringify(initialBoard));
+    let turn = 'w';
+    let selected = null; // {r, c}
+    let myColor = null;
+    let gameOver = false;
+
+    const boardEl = document.getElementById('board');
+    const statusEl = document.getElementById('status');
+
+    // Verifica se a casa está dentro do tabuleiro
+    const isInBounds = (r, c) => r >= 0 && r < 8 && c >= 0 && c < 8;
+
+    // Descobre a cor da peça (w ou b)
+    const getColor = (piece) => piece === piece.toUpperCase() ? 'w' : 'b';
+
+    // Verifica se o caminho está livre (para torre, bispo, rainha)
+    function isPathClear(startR, startC, endR, endC) {
+        const dr = Math.sign(endR - startR);
+        const dc = Math.sign(endC - startC);
+        let r = startR + dr;
+        let c = startC + dc;
+        while (r !== endR || c !== endC) {
+            if (board[r][c] !== null) return false;
+            r += dr;
+            c += dc;
+        }
+        return true;
+    }
+
+    // Verifica se o movimento é válido (Regras do Xadrez)
+    function isValidMove(startR, startC, endR, endC) {
+        if (startR === endR && startC === endC) return false;
+        const piece = board[startR][startC];
+        const target = board[endR][endC];
+        if (!piece) return false;
+        if (target && getColor(target) === getColor(piece)) return false;
+
+        const color = getColor(piece);
+        const type = piece.toLowerCase();
+        const dr = Math.abs(endR - startR);
+        const dc = Math.abs(endC - startC);
+
+        // Peão
+        if (type === 'p') {
+            const direction = color === 'w' ? -1 : 1;
+            if (startC === endC) {
+                if (endR === startR + direction && !target) return true; // 1 passo
+                if (endR === startR + 2 * direction && !target && !board[startR + direction][startC]) return true; // 2 passos
+            }
+            if (dc === 1 && endR === startR + direction && target) return true; // captura
+            return false;
+        }
+
+        // Cavalo
+        if (type === 'n') return (dr === 2 && dc === 1) || (dr === 1 && dc === 2);
+
+        // Bispo
+        if (type === 'b') return dr === dc && isPathClear(startR, startC, endR, endC);
+
+        // Torre
+        if (type === 'r') return (dr === 0 || dc === 0) && isPathClear(startR, startC, endR, endC);
+
+        // Rainha
+        if (type === 'q') return (dr === dc || dr === 0 || dc === 0) && isPathClear(startR, startC, endR, endC);
+
+        // Rei
+        if (type === 'k') return dr <= 1 && dc <= 1;
+
+        return false;
+    }
 
     // ============================================
-    // SUAS CHAVES (CONFIRA SE ESTÃO EXATAMENTE ASSIM)
+    // 2. RENDERIZAÇÃO E INTERFACE
     // ============================================
-    const SUPABASE_URL = 'https://aiprlhinimcldpqgdxeu.supabase.co'; 
-    const SUPABASE_ANON_KEY = 'sb_publishable_qUb2dauA7EeKdfOfiOQFXA_w5mLlvk-'; 
-
-    let game = new Chess(); 
-    let boardEl = document.getElementById('board');
-    let statusEl = document.getElementById('status');
-    let errorEl = document.getElementById('error-box');
-    let selectedSquare = null; 
-    let supabaseClient = null;
-    let channel = null;
-    let myColor = null; 
-    let myId = Math.random().toString(36).substring(2, 9); 
-
-    const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
-    const symbols = { 'p': '♟', 'r': '♜', 'n': '♞', 'b': '♝', 'q': '♛', 'k': '♚', 'P': '♙', 'R': '♖', 'N': '♘', 'B': '♗', 'Q': '♕', 'K': '♔' };
-
-    function initBoard() {
+    function renderBoard() {
         boardEl.innerHTML = '';
-        const board = game.board();
         for (let r = 0; r < 8; r++) {
             for (let c = 0; c < 8; c++) {
-                let div = document.createElement('div');
-                div.className = `square ${(r + c) % 2 === 0 ? 'light' : 'dark'}`;
-                let sq = files[c] + (8 - r);
-                div.dataset.sq = sq;
-                let p = board[r][c];
-                if (p) div.textContent = symbols[p.color === 'w' ? p.type.toUpperCase() : p.type];
-                div.onclick = () => handleClick(sq);
+                const div = document.createElement('div');
+                const isLight = (r + c) % 2 === 0;
+                div.className = `square ${isLight ? 'light' : 'dark'}`;
+                div.dataset.r = r;
+                div.dataset.c = c;
+                
+                if (selected && selected.r === r && selected.c === c) div.classList.add('selected');
+                if (board[r][c]) div.textContent = symbols[board[r][c]];
+                
+                // Destaques dos movimentos válidos
+                if (selected) {
+                    if (isValidMove(selected.r, selected.c, r, c)) {
+                        div.classList.add(board[r][c] ? 'valid-capture' : 'valid-move');
+                    }
+                }
+
+                div.onclick = () => handleClick(r, c);
                 boardEl.appendChild(div);
             }
         }
     }
 
-    function handleClick(sq) {
-        if (!myColor) return alert("Você ainda não está conectado a uma sala!");
-        if (game.turn() !== myColor) return alert(`Aguarde, é a vez das ${game.turn() === 'w' ? 'brancas' : 'pretas'}!`);
-
-        const p = game.get(sq);
-        if (selectedSquare) {
-            try {
-                let move = game.move({ from: selectedSquare, to: sq, promotion: 'q' });
-                if (move) {
-                    if (channel) channel.send({ type: 'broadcast', event: 'move', payload: { from: selectedSquare, to: sq, sender: myId } });
-                    selectedSquare = null;
-                    initBoard();
-                    updateStatus();
-                    return;
-                }
-            } catch (e) {}
-            
-            if (p && p.color === game.turn()) {
-                selectedSquare = sq;
-            } else {
-                selectedSquare = null;
-            }
-            initBoard();
-            if (selectedSquare) {
-                document.querySelector(`[data-sq="${selectedSquare}"]`).classList.add('selected');
-                game.moves({ square: selectedSquare, verbose: true }).forEach(m => {
-                    let el = document.querySelector(`[data-sq="${m.to}"]`);
-                    if (el) el.classList.add('valid-move');
-                });
-            }
-        } else {
-            if (p && p.color === game.turn()) {
-                selectedSquare = sq;
-                initBoard();
-                document.querySelector(`[data-sq="${selectedSquare}"]`).classList.add('selected');
-                game.moves({ square: selectedSquare, verbose: true }).forEach(m => {
-                    let el = document.querySelector(`[data-sq="${m.to}"]`);
-                    if (el) el.classList.add('valid-move');
-                });
-            }
-        }
-    }
-
-    function updateStatus() {
-        if (game.in_checkmate()) statusEl.textContent = `Xeque-mate! ${game.turn() === 'w' ? 'Pretas' : 'Brancas'} venceram.`;
-        else if (game.in_draw()) statusEl.textContent = 'Empate!';
-        else if (game.in_check()) statusEl.textContent = `Xeque!`;
-        else statusEl.textContent = `Vez das ${game.turn() === 'w' ? 'brancas' : 'pretas'}.`;
-        if (myColor) statusEl.textContent += ` (Você: ${myColor === 'w' ? 'Brancas' : 'Pretas'})`;
-    }
-
-    // ============================================
-    // CONEXÃO
-    // ============================================
-    function conectar(codigo, cor) {
-        errorEl.textContent = "";
-        document.getElementById('create-btn').disabled = true;
-        document.getElementById('join-btn').disabled = true;
-        statusEl.textContent = "Conectando...";
-
-        if (typeof window.supabase === 'undefined') {
-            alert("ERRO FATAL: A biblioteca do Supabase não carregou. O seu navegador ou rede está bloqueando o script.");
+    function handleClick(r, c) {
+        if (gameOver || !myColor) return;
+        if (turn !== myColor) {
+            statusEl.textContent = "Aguarde, é a vez do adversário!";
             return;
         }
 
-        try {
-            supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-            channel = supabaseClient.channel(`chess-${codigo}`, {
-                config: { broadcast: { self: true }, presence: { key: myId } }
-            });
+        const piece = board[r][c];
 
-            channel.on('broadcast', { event: 'move' }, (payload) => {
-                if (payload.payload.sender === myId) return;
-                try {
-                    game.move({ from: payload.payload.from, to: payload.payload.to, promotion: 'q' });
-                    initBoard();
-                    updateStatus();
-                } catch (e) { console.error(e); }
-            });
-
-            channel.on('presence', { event: 'sync' }, () => {
-                let players = Object.keys(channel.presenceState());
-                if (players.length > 1 && cor === 'w') myColor = players[0] === myId ? 'w' : 'b';
-                else myColor = cor;
+        if (selected) {
+            // Tenta mover
+            if (isValidMove(selected.r, selected.c, r, c)) {
+                const startR = selected.r, startC = selected.c;
                 
-                boardEl.classList.add('active');
-                statusEl.textContent = `Conectado à sala ${codigo}. Você é ${myColor === 'w' ? 'Brancas' : 'Pretas'}.`;
-                updateStatus();
-            });
+                // Executa movimento no tabuleiro local
+                board[r][c] = board[startR][startC];
+                board[startR][startC] = null;
+                
+                turn = turn === 'w' ? 'b' : 'w';
+                selected = null;
+                renderBoard();
+                statusEl.textContent = turn === 'w' ? "Vez das Brancas" : "Vez das Pretas";
 
-            channel.subscribe(async (status) => {
-                if (status === 'SUBSCRIBED') {
-                    await channel.track({ online_at: new Date().toISOString() });
-                } else if (status === 'CHANNEL_ERROR') {
-                    alert("Erro de conexão com o Supabase. Verifique se o Realtime está ativado no painel.");
-                    errorEl.textContent = "Erro de conexão.";
+                // Envia o movimento para o outro jogador via P2P
+                if (peerConnection) {
+                    peerConnection.send(JSON.stringify({ type: 'move', startR, startC, r, c }));
                 }
-            });
-
-        } catch (err) {
-            alert("Erro ao conectar: " + err.message);
-            document.getElementById('create-btn').disabled = false;
-            document.getElementById('join-btn').disabled = false;
+            } else {
+                // Movimento inválido: tenta selecionar outra peça
+                if (piece && getColor(piece) === myColor && turn === myColor) {
+                    selected = { r, c };
+                } else {
+                    selected = null;
+                }
+                renderBoard();
+            }
+        } else {
+            // Seleciona peça
+            if (piece && getColor(piece) === myColor && turn === myColor) {
+                selected = { r, c };
+                renderBoard();
+            }
         }
     }
 
     // ============================================
-    // EVENTOS DOS BOTÕES
+    // 3. WEBRTC (MULTIPLAYER DIRETO)
     // ============================================
-    document.getElementById('create-btn').onclick = function() {
-        alert("Botão Criar clicado! Gerando sala...");
-        let cod = Math.random().toString(36).substring(2, 8).toUpperCase();
-        conectar(cod, 'w');
+    let peerConnection = null;
+    const config = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+
+    // --- HOST (Jogador 1) ---
+    document.getElementById('host-btn').onclick = async () => {
+        try {
+            document.getElementById('host-btn').disabled = true;
+            peerConnection = new RTCPeerConnection(config);
+            const dataChannel = peerConnection.createDataChannel('chess');
+            setupDataChannel(dataChannel);
+
+            const offer = await peerConnection.createOffer();
+            await peerConnection.setLocalDescription(offer);
+
+            // Espera juntar os candidatos de rede
+            peerConnection.onicecandidate = (e) => {
+                if (!e.candidate) {
+                    // Terminou de juntar, mostra o código final
+                    document.getElementById('offer-code').value = btoa(JSON.stringify(peerConnection.localDescription));
+                    document.getElementById('offer-code').style.display = 'block';
+                    document.getElementById('host-info').classList.remove('hidden');
+                    statusEl.textContent = "Aguardando resposta do jogador 2...";
+                }
+            };
+            myColor = 'w';
+        } catch (err) {
+            alert("Erro ao criar sala: " + err);
+        }
     };
 
-    document.getElementById('join-btn').onclick = function() {
-        let cod = document.getElementById('join-input').value.trim().toUpperCase();
-        if (cod.length < 4) return alert("Digite um código válido!");
-        alert("Botão Entrar clicado! Conectando à sala " + cod);
-        conectar(cod, 'b');
+    document.getElementById('copy-btn').onclick = () => {
+        const copyText = document.getElementById('offer-code');
+        copyText.select();
+        document.execCommand("copy");
+        alert("Código copiado!");
     };
 
-    initBoard();
+    document.getElementById('finish-connect-btn').onclick = async () => {
+        const answerStr = document.getElementById('answer-input').value;
+        if (!answerStr) return;
+        try {
+            const answer = JSON.parse(atob(answerStr));
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+            statusEl.textContent = "Conectando...";
+        } catch (e) {
+            alert("Código de resposta inválido.");
+        }
+    };
+
+    // --- JOIN (Jogador 2) ---
+    document.getElementById('join-btn').onclick = async () => {
+        const offerStr = document.getElementById('offer-input').value;
+        if (!offerStr) return;
+        try {
+            document.getElementById('join-btn').disabled = true;
+            peerConnection = new RTCPeerConnection(config);
+            
+            peerConnection.ondatachannel = (event) => {
+                setupDataChannel(event.channel);
+            };
+
+            const offer = JSON.parse(atob(offerStr));
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+
+            const answer = await peerConnection.createAnswer();
+            await peerConnection.setLocalDescription(answer);
+
+            peerConnection.onicecandidate = (e) => {
+                if (!e.candidate) {
+                    document.getElementById('answer-code').value = btoa(JSON.stringify(peerConnection.localDescription));
+                    document.getElementById('answer-code').style.display = 'block';
+                    document.getElementById('join-info').classList.remove('hidden');
+                    statusEl.textContent = "Envie a resposta para o jogador 1.";
+                }
+            };
+            myColor = 'b';
+        } catch (err) {
+            alert("Erro ao conectar: " + err);
+        }
+    };
+
+    document.getElementById('copy-answer-btn').onclick = () => {
+        const copyText = document.getElementById('answer-code');
+        copyText.select();
+        document.execCommand("copy");
+        alert("Resposta copiada! Envie para quem criou a sala.");
+    };
+
+    // --- CONFIGURAÇÃO DO CANAL DE DADOS ---
+    function setupDataChannel(channel) {
+        window.dataChannel = channel;
+
+        channel.onopen = () => {
+            statusEl.textContent = myColor === 'w' ? "Jogo Iniciado! Vez das Brancas." : "Jogo Iniciado! Aguarde as Brancas.";
+            boardEl.classList.add('active');
+            document.getElementById('create-panel').classList.add('hidden');
+            document.getElementById('join-panel').classList.add('hidden');
+            renderBoard();
+        };
+
+        channel.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            if (data.type === 'move') {
+                // Executa o movimento do adversário
+                board[data.r][data.c] = board[data.startR][data.startC];
+                board[data.startR][data.startC] = null;
+                turn = turn === 'w' ? 'b' : 'w';
+                selected = null;
+                renderBoard();
+                statusEl.textContent = turn === 'w' ? "Vez das Brancas" : "Vez das Pretas";
+            }
+        };
+    }
+
+    // Inicializa a interface
+    renderBoard();
 </script>
 </body>
 </html>
