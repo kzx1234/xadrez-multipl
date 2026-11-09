@@ -1,496 +1,384 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Xadrez Multiplayer P2P</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: system-ui, -apple-system, sans-serif;
-      background: #1a1a2e;
-      color: #eee;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      min-height: 100vh;
-      padding: 20px;
-    }
-    h1 { font-size: 1.4rem; margin-bottom: 16px; color: #e2b714; }
-
-    #lobby {
-      background: #16213e;
-      padding: 24px;
-      border-radius: 12px;
-      width: 100%;
-      max-width: 420px;
-      text-align: center;
-    }
-    #lobby p { font-size: 0.85rem; color: #aaa; margin-bottom: 16px; line-height: 1.5; }
-
-    .btn {
-      background: #e2b714;
-      color: #1a1a2e;
-      border: none;
-      padding: 12px 24px;
-      border-radius: 8px;
-      font-size: 1rem;
-      font-weight: 700;
-      cursor: pointer;
-      width: 100%;
-      margin-bottom: 12px;
-      transition: background 0.2s;
-    }
-    .btn:hover { background: #f0c93a; }
-    .btn:disabled { background: #555; color: #999; cursor: not-allowed; }
-    .btn.secondary {
-      background: transparent;
-      border: 2px solid #e2b714;
-      color: #e2b714;
-    }
-    .btn.secondary:hover { background: rgba(226,183,20,0.1); }
-
-    #room-code-display {
-      background: #0f3460;
-      padding: 12px;
-      border-radius: 8px;
-      font-family: monospace;
-      font-size: 1.1rem;
-      margin-bottom: 12px;
-      word-break: break-all;
-      color: #e2b714;
-      display: none;
-    }
-
-    #join-section { display: none; margin-top: 8px; }
-    #join-input {
-      width: 100%;
-      padding: 12px;
-      border-radius: 8px;
-      border: 2px solid #333;
-      background: #0f3460;
-      color: #eee;
-      font-size: 1rem;
-      margin-bottom: 8px;
-      font-family: monospace;
-    }
-    #join-input:focus { outline: none; border-color: #e2b714; }
-
-    #status {
-      margin-top: 16px;
-      font-size: 0.9rem;
-      color: #aaa;
-      min-height: 1.4em;
-    }
-
-    #game-area {
-      display: none;
-      flex-direction: column;
-      align-items: center;
-      width: 100%;
-      max-width: 480px;
-    }
-
-    #turn-indicator {
-      font-size: 1.1rem;
-      font-weight: 700;
-      margin-bottom: 8px;
-      padding: 8px 20px;
-      border-radius: 20px;
-      background: #16213e;
-    }
-    #turn-indicator.white { color: #fff; }
-    #turn-indicator.black { color: #888; }
-    #turn-indicator.check { background: #8b0000; color: #fff; }
-    #turn-indicator.over { background: #0f3460; color: #e2b714; }
-
-    #board {
-      display: grid;
-      grid-template-columns: repeat(8, 1fr);
-      grid-template-rows: repeat(8, 1fr);
-      width: 100%;
-      aspect-ratio: 1;
-      border: 3px solid #e2b714;
-      border-radius: 8px;
-      overflow: hidden;
-      user-select: none;
-    }
-
-    .square {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: min(8vw, 3rem);
-      cursor: pointer;
-      position: relative;
-      line-height: 1;
-    }
-    .square.light { background: #f0d9b5; }
-    .square.dark { background: #b58863; }
-    .square.selected { outline: 3px solid #e2b714; outline-offset: -3px; }
-    .square.legal-move::after {
-      content: '';
-      position: absolute;
-      width: 30%;
-      height: 30%;
-      border-radius: 50%;
-      background: rgba(0, 0, 0, 0.25);
-    }
-    .square.legal-capture::after {
-      content: '';
-      position: absolute;
-      width: 80%;
-      height: 80%;
-      border-radius: 50%;
-      border: 4px solid rgba(0, 0, 0, 0.25);
-      background: transparent;
-    }
-    .square.last-move { box-shadow: inset 0 0 0 4px rgba(226,183,20,0.5); }
-
-    #info-bar {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      width: 100%;
-      margin-top: 12px;
-      font-size: 0.85rem;
-      color: #888;
-    }
-    #info-bar span { max-width: 50%; word-break: break-all; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Xadrez Multiplayer</title>
+    <!-- chess.js: Biblioteca de regras oficiais do xadrez -->
+    <script src="https://cdn.jsdelivr.net/npm/chess.js@1.0.0/dist/chess.js"></script>
+    <!-- Supabase Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        :root {
+            --light: #f0d9b5;
+            --dark: #b58863;
+            --highlight: #7b9c5e;
+            --selected: #f6f669;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #2b2b2b;
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            margin: 0;
+        }
+        h1 { margin-bottom: 10px; }
+        #status {
+            margin-bottom: 15px;
+            padding: 10px 20px;
+            background: #444;
+            border-radius: 8px;
+            font-weight: bold;
+            min-height: 24px;
+            text-align: center;
+        }
+        #board {
+            display: grid;
+            grid-template-columns: repeat(8, 70px);
+            grid-template-rows: repeat(8, 70px);
+            border: 5px solid #5a3e2b;
+            border-radius: 4px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            user-select: none;
+        }
+        .square {
+            width: 70px;
+            height: 70px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 50px;
+            cursor: pointer;
+            position: relative;
+        }
+        .square.light { background-color: var(--light); color: #000; }
+        .square.dark { background-color: var(--dark); color: #000; }
+        .square.selected { background-color: var(--selected) !important; }
+        .square.valid-move::after {
+            content: '';
+            width: 20px;
+            height: 20px;
+            background-color: rgba(0,0,0,0.2);
+            border-radius: 50%;
+            position: absolute;
+        }
+        .square.valid-capture::after {
+            content: '';
+            width: 60px;
+            height: 60px;
+            border: 5px solid rgba(0,0,0,0.2);
+            border-radius: 50%;
+            position: absolute;
+            box-sizing: border-box;
+        }
+        .square.check { box-shadow: inset 0 0 20px 5px red; }
+        #controls {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: center;
+        }
+        input, button {
+            padding: 10px 15px;
+            border-radius: 6px;
+            border: none;
+            font-size: 16px;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        button:hover { background: #45a049; }
+        button:disabled { background: #666; cursor: not-allowed; }
+        #room-input { width: 150px; }
+    </style>
 </head>
 <body>
 
-<h1>♜ Xadrez Multiplayer P2P</h1>
+<h1>♔ Xadrez Multiplayer ♚</h1>
+<div id="status">Configure a sala e conecte</div>
+<div id="board"></div>
 
-<div id="lobby">
-  <p>Conexão ponto a ponto através do PeerJS, sem servidor. As regras são totalmente compatíveis com a FIDE.</p>
-  <button class="btn" id="create-btn">Criar sala (jogar com peças brancas)</button>
-  <div id="room-code-display"></div>
-  <button class="btn secondary" id="show-join-btn">Inserir código da sala para entrar</button>
-  <div id="join-section">
-    <input type="text" id="join-input" placeholder="Cole o código da sala aqui" autocomplete="off">
-    <button class="btn" id="join-btn">Conectar</button>
-  </div>
-  <div id="status"></div>
+<div id="controls">
+    <input type="text" id="room-input" placeholder="ID da Sala (ex: 123)" value="sala1">
+    <button id="connect-btn">Conectar / Criar Sala</button>
+    <button id="reset-btn">Nova Partida (Local)</button>
 </div>
 
-<div id="game-area">
-  <div id="turn-indicator" class="white">Vez das brancas</div>
-  <div id="board"></div>
-  <div id="info-bar">
-    <span id="my-role">Você: —</span>
-    <span id="connection-status">Não conectado</span>
-  </div>
-</div>
+<script>
+    // ============================================
+    // CONFIGURAÇÃO DO SUPABASE (SUAS CHAVES AQUI)
+    // ============================================
+    const SUPABASE_URL = 'https://aiprlhinimcldpqgdxeu.supabase.co'; 
+    const SUPABASE_ANON_KEY = 'sb_publishable_qUb2dauA7EeKdfOfiOQFXA_w5mLlvk-'; 
 
-<script type="importmap">
-{
-  "imports": {
-    "chess.js": "https://cdn.jsdelivr.net/npm/chess.js@1.0.0/+esm",
-    "peerjs": "https://cdn.jsdelivr.net/npm/peerjs@1.5.4/+esm"
-  }
-}
+    // Variáveis de estado do jogo
+    let game = new Chess(); 
+    let boardElement = document.getElementById('board');
+    let statusElement = document.getElementById('status');
+    let selectedSquare = null; 
+    
+    // Variáveis de conexão
+    let supabase = null;
+    let channel = null;
+    let myColor = 'w'; 
+    let isMultiplayer = false;
+    let roomId = '';
+    let myClientId = Math.random().toString(36).substring(2, 9); 
+
+    const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+
+    const pieceSymbols = {
+        'p': '♟', 'r': '♜', 'n': '♞', 'b': '♝', 'q': '♛', 'k': '♚',
+        'P': '♙', 'R': '♖', 'N': '♘', 'B': '♗', 'Q': '♕', 'K': '♔'
+    };
+
+    // ============================================
+    // INICIALIZAÇÃO DO TABULEIRO
+    // ============================================
+    function initBoard() {
+        boardElement.innerHTML = '';
+        const board = game.board();
+        
+        for (let row = 0; row < 8; row++) {
+            for (let col = 0; col < 8; col++) {
+                const squareDiv = document.createElement('div');
+                const isLight = (row + col) % 2 === 0;
+                squareDiv.className = `square ${isLight ? 'light' : 'dark'}`;
+                
+                const squareName = files[col] + (8 - row); 
+                squareDiv.dataset.square = squareName;
+                squareDiv.dataset.row = row;
+                squareDiv.dataset.col = col;
+                
+                const piece = board[row][col];
+                if (piece) {
+                    const symbolKey = piece.color === 'w' ? piece.type.toUpperCase() : piece.type;
+                    squareDiv.textContent = pieceSymbols[symbolKey];
+                }
+                
+                squareDiv.addEventListener('click', () => handleSquareClick(row, col, squareName));
+                boardElement.appendChild(squareDiv);
+            }
+        }
+        highlightCheck();
+    }
+
+    // ============================================
+    // LÓGICA DE CLIQUE E MOVIMENTO
+    // ============================================
+    function handleSquareClick(row, col, squareName) {
+        if (game.game_over()) {
+            statusElement.textContent = 'Fim de jogo! Reinicie.';
+            return;
+        }
+
+        if (isMultiplayer && game.turn() !== myColor) {
+            statusElement.textContent = `Aguarde... é a vez das ${game.turn() === 'w' ? 'brancas' : 'pretas'}.`;
+            return;
+        }
+
+        const piece = game.get(squareName);
+
+        if (selectedSquare) {
+            const from = selectedSquare.square;
+            const to = squareName;
+
+            const move = tryMove(from, to);
+            
+            if (move) {
+                if (isMultiplayer && channel) {
+                    channel.send({
+                        type: 'broadcast',
+                        event: 'move',
+                        payload: { from: from, to: to, promotion: move.promotion || 'q', sender: myClientId }
+                    });
+                }
+                selectedSquare = null;
+                initBoard();
+                updateStatus();
+                return;
+            } else {
+                if (piece && piece.color === game.turn()) {
+                    selectPiece(row, col, squareName);
+                } else {
+                    selectedSquare = null;
+                    initBoard();
+                }
+            }
+        } else {
+            if (piece && piece.color === game.turn()) {
+                if (isMultiplayer && piece.color !== myColor) {
+                    statusElement.textContent = 'Você não pode mover as peças do adversário!';
+                    return;
+                }
+                selectPiece(row, col, squareName);
+            }
+        }
+    }
+
+    function selectPiece(row, col, squareName) {
+        selectedSquare = { row, col, square: squareName };
+        document.querySelectorAll('.square').forEach(el => el.classList.remove('selected'));
+        const squareDiv = document.querySelector(`.square[data-square="${squareName}"]`);
+        if (squareDiv) squareDiv.classList.add('selected');
+        
+        const moves = game.moves({ square: squareName, verbose: true });
+        moves.forEach(m => {
+            const targetDiv = document.querySelector(`.square[data-square="${m.to}"]`);
+            if (targetDiv) {
+                const isCapture = game.get(m.to) !== null;
+                targetDiv.classList.add(isCapture ? 'valid-capture' : 'valid-move');
+            }
+        });
+    }
+
+    function tryMove(from, to) {
+        try {
+            const move = game.move({ from: from, to: to, promotion: 'q' });
+            return move; 
+        } catch (e) {
+            return null; 
+        }
+    }
+
+    // ============================================
+    // ATUALIZAÇÃO DE STATUS E XEQUE
+    // ============================================
+    function updateStatus() {
+        if (game.in_checkmate()) {
+            statusElement.textContent = `Xeque-mate! ${game.turn() === 'w' ? 'Pretas' : 'Brancas'} venceram.`;
+        } else if (game.in_draw()) {
+            statusElement.textContent = 'Empate! (Afogamento, material insuficiente, etc.)';
+        } else if (game.in_check()) {
+            statusElement.textContent = `Xeque! Vez das ${game.turn() === 'w' ? 'brancas' : 'pretas'}.`;
+        } else {
+            statusElement.textContent = `Vez das ${game.turn() === 'w' ? 'brancas' : 'pretas'}.`;
+        }
+        
+        if (isMultiplayer) {
+            statusElement.textContent += ` (Você é ${myColor === 'w' ? 'Brancas' : 'Pretas'})`;
+        }
+        highlightCheck();
+    }
+
+    function highlightCheck() {
+        document.querySelectorAll('.square').forEach(el => el.classList.remove('check'));
+        if (game.in_check()) {
+            const board = game.board();
+            const turn = game.turn();
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    const p = board[r][c];
+                    if (p && p.type === 'k' && p.color === turn) {
+                        const sq = files[c] + (8 - r);
+                        const el = document.querySelector(`.square[data-square="${sq}"]`);
+                        if (el) el.classList.add('check');
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
+    // ============================================
+    // SUPABASE MULTIPLAYER
+    // ============================================
+    async function connectToRoom() {
+        const inputRoom = document.getElementById('room-input').value.trim();
+        if (!inputRoom) {
+            alert('Digite um ID de sala.');
+            return;
+        }
+        
+        roomId = inputRoom;
+        isMultiplayer = true;
+        myColor = 'w'; 
+        
+        document.getElementById('connect-btn').disabled = true;
+        statusElement.textContent = 'Conectando ao Supabase...';
+
+        try {
+            supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            
+            const channelName = `chess-room-${roomId}`;
+            
+            // CONFIGURAÇÃO IMPORTANTE: self: true e ack: true para garantir entrega das mensagens
+            channel = supabase.channel(channelName, {
+                config: { broadcast: { self: true, ack: true } } 
+            });
+
+            channel.on('broadcast', { event: 'move' }, (payload) => {
+                const data = payload.payload;
+                if (data.sender === myClientId) return;
+                
+                try {
+                    game.move({ from: data.from, to: data.to, promotion: data.promotion || 'q' });
+                    initBoard();
+                    updateStatus();
+                } catch (e) {
+                    console.error('Movimento remoto inválido:', e);
+                }
+            });
+
+            channel.on('broadcast', { event: 'join' }, (payload) => {
+                const data = payload.payload;
+                if (data.sender === myClientId) return;
+                
+                if (myColor === 'w') {
+                    myColor = 'b';
+                }
+                statusElement.textContent = `Jogador conectado! Você é ${myColor === 'w' ? 'Brancas' : 'Pretas'}.`;
+                updateStatus();
+            });
+
+            await channel.subscribe((status) => {
+                if (status === 'SUBSCRIBED') {
+                    channel.send({
+                        type: 'broadcast',
+                        event: 'join',
+                        payload: { sender: myClientId }
+                    });
+                    statusElement.textContent = `Conectado à sala "${roomId}". Aguardando adversário...`;
+                } else {
+                    statusElement.textContent = `Status da conexão: ${status}`;
+                }
+            });
+
+            updateStatus();
+
+        } catch (error) {
+            console.error(error);
+            statusElement.textContent = 'Erro ao conectar: ' + error.message;
+            document.getElementById('connect-btn').disabled = false;
+        }
+    }
+
+    function resetGame() {
+        game = new Chess();
+        selectedSquare = null;
+        initBoard();
+        updateStatus();
+    }
+
+    document.getElementById('connect-btn').addEventListener('click', connectToRoom);
+    document.getElementById('reset-btn').addEventListener('click', () => {
+        if (isMultiplayer) {
+            if (!confirm('Você está em uma partida multiplayer. Resetar vai reiniciar o tabuleiro localmente. Continuar?')) return;
+        }
+        resetGame();
+    });
+
+    initBoard();
+    updateStatus();
+
 </script>
-
-<script type="module">
-import { Chess } from 'chess.js';
-import Peer from 'peerjs';
-
-// ========== Estado global ==========
-const chess = new Chess();
-let peer = null;
-let conn = null;
-let myColor = null;          // 'w' ou 'b'
-let isMyTurn = false;
-let selectedSquare = null;
-let legalTargets = [];       // [{ to, flags }]
-let lastMove = null;         // { from, to }
-let gameOver = false;
-
-// ========== Elementos DOM ==========
-const lobby = document.getElementById('lobby');
-const gameArea = document.getElementById('game-area');
-const boardEl = document.getElementById('board');
-const statusEl = document.getElementById('status');
-const turnEl = document.getElementById('turn-indicator');
-const roomCodeDisplay = document.getElementById('room-code-display');
-const joinSection = document.getElementById('join-section');
-const joinInput = document.getElementById('join-input');
-const myRoleEl = document.getElementById('my-role');
-const connStatusEl = document.getElementById('connection-status');
-
-// ========== Renderização do tabuleiro ==========
-const pieceSymbols = {
-  'wp': '♙', 'wn': '♘', 'wb': '♗', 'wr': '♖', 'wq': '♕', 'wk': '♔',
-  'bp': '♟', 'bn': '♞', 'bb': '♝', 'br': '♜', 'bq': '♛', 'bk': '♚'
-};
-
-function renderBoard() {
-  boardEl.innerHTML = '';
-  const board = chess.board(); // 8x8, rank 8 primeiro
-
-  for (let row = 0; row < 8; row++) {
-    for (let col = 0; col < 8; col++) {
-      const squareName = String.fromCharCode(97 + col) + (8 - row);
-      const piece = board[row][col];
-      const isLight = (row + col) % 2 === 0;
-
-      const div = document.createElement('div');
-      div.className = `square ${isLight ? 'light' : 'dark'}`;
-      div.dataset.square = squareName;
-
-      if (piece) {
-        div.textContent = pieceSymbols[piece.color + piece.type];
-        div.style.color = piece.color === 'w' ? '#fff' : '#1a1a2e';
-        div.style.textShadow = piece.color === 'w'
-          ? '0 1px 2px rgba(0,0,0,0.6)'
-          : '0 1px 2px rgba(255,255,255,0.3)';
-      }
-
-      if (selectedSquare === squareName) {
-        div.classList.add('selected');
-      }
-
-      const target = legalTargets.find(t => t.to === squareName);
-      if (target) {
-        div.classList.add(target.flags.includes('c') || target.flags.includes('e')
-          ? 'legal-capture' : 'legal-move');
-      }
-
-      if (lastMove && (lastMove.from === squareName || lastMove.to === squareName)) {
-        div.classList.add('last-move');
-      }
-
-      div.addEventListener('click', () => onSquareClick(squareName));
-      boardEl.appendChild(div);
-    }
-  }
-
-  updateTurnIndicator();
-}
-
-function updateTurnIndicator() {
-  if (chess.isGameOver()) {
-    gameOver = true;
-    if (chess.isCheckmate()) {
-      const winner = chess.turn() === 'w' ? 'Pretas' : 'Brancas';
-      turnEl.textContent = `Xeque-mate! ${winner} venceram`;
-    } else if (chess.isDraw()) {
-      turnEl.textContent = 'Empate';
-    } else {
-      turnEl.textContent = 'Fim do jogo';
-    }
-    turnEl.className = 'over';
-    return;
-  }
-
-  const turn = chess.turn();
-  turnEl.textContent = turn === 'w' ? 'Vez das brancas' : 'Vez das pretas';
-  turnEl.className = turn;
-  if (chess.inCheck()) {
-    turnEl.textContent += ' — Xeque!';
-    turnEl.className = 'check';
-  }
-}
-
-// ========== Lógica de interação ==========
-function onSquareClick(square) {
-  if (gameOver || !isMyTurn || !conn || !conn.open) return;
-
-  const piece = chess.get(square);
-
-  if (selectedSquare) {
-    const target = legalTargets.find(t => t.to === square);
-    if (target) {
-      executeMove(selectedSquare, square);
-      return;
-    }
-  }
-
-  if (piece && piece.color === chess.turn() && piece.color === myColor) {
-    selectedSquare = square;
-    legalTargets = chess.moves({ square, verbose: true });
-    renderBoard();
-  } else {
-    selectedSquare = null;
-    legalTargets = [];
-    renderBoard();
-  }
-}
-
-function executeMove(from, to) {
-  const moves = chess.moves({ square: from, verbose: true });
-  const move = moves.find(m => m.to === to);
-  if (!move) return;
-
-  // Se for promoção de peão, padrão para rainha
-  const isPromotion = move.flags.includes('p');
-  const promotion = isPromotion ? 'q' : undefined;
-
-  try {
-    const result = chess.move({ from, to, promotion });
-    if (!result) return;
-  } catch (e) {
-    console.error('Movimento ilegal:', e);
-    return;
-  }
-
-  lastMove = { from, to };
-  selectedSquare = null;
-  legalTargets = [];
-  renderBoard();
-
-  // Enviar para o oponente
-  if (conn && conn.open) {
-    conn.send({ type: 'move', from, to, promotion });
-  }
-
-  isMyTurn = false;
-  connStatusEl.textContent = 'Movimento enviado, aguardando oponente...';
-  checkGameEnd();
-}
-
-function checkGameEnd() {
-  if (chess.isGameOver()) {
-    gameOver = true;
-    updateTurnIndicator();
-    connStatusEl.textContent = 'Partida encerrada';
-  }
-}
-
-// ========== Processamento de mensagens do oponente ==========
-function handleMessage(data) {
-  if (data.type === 'move') {
-    try {
-      chess.move({ from: data.from, to: data.to, promotion: data.promotion });
-    } catch (e) {
-      console.error('Falha ao aplicar movimento do oponente:', e);
-      return;
-    }
-    lastMove = { from: data.from, to: data.to };
-    selectedSquare = null;
-    legalTargets = [];
-    isMyTurn = true;
-    renderBoard();
-    connStatusEl.textContent = 'Sua vez';
-    checkGameEnd();
-  }
-
-  if (data.type === 'restart') {
-    chess.reset();
-    lastMove = null;
-    selectedSquare = null;
-    legalTargets = [];
-    gameOver = false;
-    isMyTurn = myColor === 'w';
-    renderBoard();
-    connStatusEl.textContent = isMyTurn ? 'Sua vez' : 'Vez do oponente';
-  }
-}
-
-// ========== Criação de sala (brancas) ==========
-document.getElementById('create-btn').addEventListener('click', () => {
-  const btn = document.getElementById('create-btn');
-  btn.disabled = true;
-  btn.textContent = 'Criando sala...';
-  statusEl.textContent = 'Conectando ao servidor de sinalização...';
-
-  peer = new Peer();
-
-  peer.on('open', (id) => {
-    myColor = 'w';
-    isMyTurn = true;
-    roomCodeDisplay.style.display = 'block';
-    roomCodeDisplay.textContent = `Código da sala: ${id}`;
-    statusEl.textContent = 'Sala criada. Envie o código acima para seu amigo. Aguardando conexão...';
-    btn.textContent = 'Sala criada (aguardando...)';
-
-    peer.on('connection', (connection) => {
-      conn = connection;
-      setupConnection();
-      enterGame();
-    });
-  });
-
-  peer.on('error', (err) => {
-    console.error('Erro PeerJS:', err);
-    statusEl.textContent = 'Erro na conexão: ' + err.type;
-    btn.disabled = false;
-    btn.textContent = 'Criar sala (jogar com peças brancas)';
-  });
-});
-
-// ========== Entrar em sala (pretas) ==========
-document.getElementById('show-join-btn').addEventListener('click', () => {
-  joinSection.style.display = joinSection.style.display === 'none' ? 'block' : 'none';
-});
-
-document.getElementById('join-btn').addEventListener('click', () => {
-  const code = joinInput.value.trim();
-  if (!code) return;
-
-  const btn = document.getElementById('join-btn');
-  btn.disabled = true;
-  btn.textContent = 'Conectando...';
-  statusEl.textContent = 'Conectando à sala...';
-
-  peer = new Peer();
-
-  peer.on('open', () => {
-    myColor = 'b';
-    isMyTurn = false;
-    conn = peer.connect(code);
-
-    conn.on('open', () => {
-      setupConnection();
-      enterGame();
-    });
-
-    conn.on('error', (err) => {
-      console.error('Erro de conexão:', err);
-      statusEl.textContent = 'Falha na conexão, verifique o código da sala.';
-      btn.disabled = false;
-      btn.textContent = 'Conectar';
-    });
-  });
-
-  peer.on('error', (err) => {
-    console.error('Erro PeerJS:', err);
-    statusEl.textContent = 'Erro: ' + err.type;
-    btn.disabled = false;
-    btn.textContent = 'Conectar';
-  });
-});
-
-// ========== Configuração da conexão ==========
-function setupConnection() {
-  conn.on('data', (data) => {
-    handleMessage(data);
-  });
-
-  conn.on('close', () => {
-    connStatusEl.textContent = 'Conexão desconectada';
-    isMyTurn = false;
-  });
-
-  conn.on('error', (err) => {
-    console.error('Erro no DataConnection:', err);
-    connStatusEl.textContent = 'Erro na conexão';
-  });
-}
-
-function enterGame() {
-  lobby.style.display = 'none';
-  gameArea.style.display = 'flex';
-  myRoleEl.textContent = myColor === 'w' ? 'Você: Brancas ♔' : 'Você: Pretas ♚';
-  connStatusEl.textContent = isMyTurn ? 'Sua vez' : 'Vez do oponente';
-  renderBoard();
-}
-
-// ========== Inicialização ==========
-renderBoard();
-</script>
-
 </body>
 </html>
